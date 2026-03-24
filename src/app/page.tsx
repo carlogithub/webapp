@@ -341,12 +341,10 @@ export default function Home() {
 
         {/* Data Display */}
         {!loading && selectedLocation && weatherData && climateData && (() => {
-          const anomalyScore = calculateAnomalyScore(
-            weatherData.anomaly.temperature_anomaly,
-            extremeMode,
-            climateData.current_event_frequency,
-            climateData.future_event_frequency
-          );
+          const firstDay = weatherData.daily_forecast?.[0];
+          const anomalyScore = firstDay
+            ? (extremeMode === 'hot' ? firstDay.max_rarity_score : extremeMode === 'cold' ? firstDay.min_rarity_score : firstDay.wet_rarity_score)
+            : calculateAnomalyScore(weatherData.anomaly.temperature_anomaly, extremeMode, climateData.current_event_frequency, climateData.future_event_frequency);
           const anomalyInfo = getAnomalyLevel(anomalyScore);
 
           const forecastDays = weatherData.daily_forecast || [];
@@ -466,29 +464,30 @@ export default function Home() {
                   </div>
                   <div className="h-44 w-full rounded-lg border bg-gray-50 p-4">
                     <p className="text-xs text-gray-500 mb-2">5-day {curveLabel} curve [{curveUnits}] (click points to view day-specific values)</p>
-                    <svg width="100%" height="140" viewBox="0 0 300 140" preserveAspectRatio="none">
-                      <polyline
-                        fill="none"
-                        stroke="#4f46e5"
-                        strokeWidth="3"
-                        points={tempCurvePoints}
-                      />
-                      {weatherData.temperature_percentiles && (extremeMode !== 'wet') && (
-                        <>
-                          <line x1="0" y1={yForValue(weatherData.temperature_percentiles.min5)} x2="300" y2={yForValue(weatherData.temperature_percentiles.min5)} stroke="#3b82f6" strokeDasharray="4 2" />
-                          <line x1="0" y1={yForValue(weatherData.temperature_percentiles.min95)} x2="300" y2={yForValue(weatherData.temperature_percentiles.min95)} stroke="#3b82f6" strokeDasharray="4 2" />
-                          <line x1="0" y1={yForValue(weatherData.temperature_percentiles.max5)} x2="300" y2={yForValue(weatherData.temperature_percentiles.max5)} stroke="#ef4444" strokeDasharray="4 2" />
-                          <line x1="0" y1={yForValue(weatherData.temperature_percentiles.max95)} x2="300" y2={yForValue(weatherData.temperature_percentiles.max95)} stroke="#ef4444" strokeDasharray="4 2" />
-                        </>
-                      )}
-                      {forecastDays.map((day, idx) => {
-                        const value = extremeMode === 'hot' ? day.tmax : extremeMode === 'cold' ? day.tmin : day.precip;
-                        const norm = maxCurve === minCurve ? 0.5 : (value - minCurve) / (maxCurve - minCurve);
-                        const x = 12 + idx * (280 / Math.max(1, forecastDays.length - 1));
-                        const y = 120 - norm * 100;
-                        return (
-                          <g key={day.date}>
+                    <div className="relative">
+                      <svg width="100%" height="120" viewBox="0 0 300 120" preserveAspectRatio="none">
+                        <polyline
+                          fill="none"
+                          stroke="#4f46e5"
+                          strokeWidth="3"
+                          points={tempCurvePoints}
+                        />
+                        {weatherData.temperature_percentiles && (extremeMode !== 'wet') && (
+                          <>
+                            <line x1="0" y1={yForValue(weatherData.temperature_percentiles.min5)} x2="300" y2={yForValue(weatherData.temperature_percentiles.min5)} stroke="#3b82f6" strokeDasharray="4 2" />
+                            <line x1="0" y1={yForValue(weatherData.temperature_percentiles.min95)} x2="300" y2={yForValue(weatherData.temperature_percentiles.min95)} stroke="#3b82f6" strokeDasharray="4 2" />
+                            <line x1="0" y1={yForValue(weatherData.temperature_percentiles.max5)} x2="300" y2={yForValue(weatherData.temperature_percentiles.max5)} stroke="#ef4444" strokeDasharray="4 2" />
+                            <line x1="0" y1={yForValue(weatherData.temperature_percentiles.max95)} x2="300" y2={yForValue(weatherData.temperature_percentiles.max95)} stroke="#ef4444" strokeDasharray="4 2" />
+                          </>
+                        )}
+                        {forecastDays.map((day, idx) => {
+                          const value = extremeMode === 'hot' ? day.tmax : extremeMode === 'cold' ? day.tmin : day.precip;
+                          const norm = maxCurve === minCurve ? 0.5 : (value - minCurve) / (maxCurve - minCurve);
+                          const x = 12 + idx * (280 / Math.max(1, forecastDays.length - 1));
+                          const y = 120 - norm * 100;
+                          return (
                             <circle
+                              key={day.date}
                               cx={x}
                               cy={y}
                               r={4}
@@ -496,13 +495,42 @@ export default function Home() {
                               onClick={() => setSelectedForecastDay(day)}
                               style={{ cursor: 'pointer' }}
                             />
-                            <text x={x} y={135} fontSize="10" textAnchor="middle" fill="#444">
+                          );
+                        })}
+                      </svg>
+                      {/* Horizontal line labels — HTML overlay, same y% as SVG lines */}
+                      {weatherData.temperature_percentiles && extremeMode !== 'wet' && (() => {
+                        const p = weatherData.temperature_percentiles;
+                        return [
+                          { label: `min p5 ${p.min5}°C`,  value: p.min5,  color: '#3b82f6' },
+                          { label: `min p95 ${p.min95}°C`, value: p.min95, color: '#3b82f6' },
+                          { label: `max p5 ${p.max5}°C`,  value: p.max5,  color: '#ef4444' },
+                          { label: `max p95 ${p.max95}°C`, value: p.max95, color: '#ef4444' },
+                        ].map(({ label, value, color }) => (
+                          <span
+                            key={label}
+                            className="absolute right-1 text-xs -translate-y-1/2 bg-gray-50 px-0.5 leading-none"
+                            style={{ top: `${yForValue(value) / 120 * 100}%`, color }}
+                          >
+                            {label}
+                          </span>
+                        ));
+                      })()}
+                      <div className="relative h-5">
+                        {forecastDays.map((day, idx) => {
+                          const pct = (12 + idx * (280 / Math.max(1, forecastDays.length - 1))) / 300 * 100;
+                          return (
+                            <span
+                              key={day.date}
+                              className="absolute text-xs text-gray-500 -translate-x-1/2"
+                              style={{ left: `${pct}%` }}
+                            >
                               {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <p className="mt-2 text-xs text-gray-500">
                       Min {curveLabel.toLowerCase()}: {minCurve.toFixed(1)}{curveUnits}, max {curveLabel.toLowerCase()}: {maxCurve.toFixed(1)}{curveUnits}.
                     </p>
@@ -633,7 +661,7 @@ export default function Home() {
                       <p className="text-sm text-gray-700 mt-1">
                         {climateData.frequency_increase_percent >= 0
                           ? <>Event frequency expected to increase <span className="font-bold text-orange-600">+{climateData.frequency_increase_percent}%</span></>
-                          : <>Event frequency expected to decrease <span className="font-bold text-blue-600">{climateData.frequency_increase_percent}%</span></>
+                          : <>Its frequency is expected to decrease by <span className="font-bold text-blue-600">{Math.abs(climateData.frequency_increase_percent)}%</span></>
                         }
                         <br />
                         <span className="text-xs">
