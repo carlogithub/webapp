@@ -43,8 +43,10 @@ interface WeatherData {
     precipitation_anomaly: number;
     min_historical_frequency_percent: number;
     max_historical_frequency_percent: number;
+    wet_historical_frequency_percent: number;
     return_period_min_years: number;
     return_period_max_years: number;
+    return_period_wet_years: number;
     min_rarity_score: number;
     max_rarity_score: number;
     wet_rarity_score: number;
@@ -575,13 +577,13 @@ export default function Home() {
                       <div>
                         <p className="text-xs font-semibold text-gray-600">Daily Return Period ({curveLabel})</p>
                         <p className="text-lg font-bold">
-                          1 in {extremeMode === 'hot' ? selectedForecastDay.return_period_max_years.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.return_period_min_years.toFixed(1) : selectedForecastDay.return_period_max_years.toFixed(1)} years
+                          1 in {extremeMode === 'hot' ? selectedForecastDay.return_period_max_years.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.return_period_min_years.toFixed(1) : selectedForecastDay.return_period_wet_years.toFixed(1)} years
                         </p>
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-gray-600">Historical Frequency ({curveLabel})</p>
                         <p className="text-lg font-bold">
-                          {extremeMode === 'hot' ? selectedForecastDay.max_historical_frequency_percent.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.min_historical_frequency_percent.toFixed(1) : selectedForecastDay.wet_rarity_score.toFixed(1)}%
+                          {extremeMode === 'hot' ? selectedForecastDay.max_historical_frequency_percent.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.min_historical_frequency_percent.toFixed(1) : selectedForecastDay.wet_historical_frequency_percent.toFixed(1)}%
                         </p>
                       </div>
                     </div>
@@ -608,7 +610,7 @@ export default function Home() {
                       <p className="text-xs font-semibold text-gray-500">Selected Forecast Day Return Period (based on daily {extremeMode === 'hot' ? 'max temperature' : extremeMode === 'cold' ? 'min temperature' : 'precipitation'})</p>
                       {selectedForecastDay ? (
                         <p className="text-lg font-bold text-purple-600">
-                          1 in {extremeMode === 'hot' ? selectedForecastDay.return_period_max_years.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.return_period_min_years.toFixed(1) : selectedForecastDay.return_period_max_years.toFixed(1)} years
+                          1 in {extremeMode === 'hot' ? selectedForecastDay.return_period_max_years.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.return_period_min_years.toFixed(1) : selectedForecastDay.return_period_wet_years.toFixed(1)} years
                           <span className="text-xs text-gray-500">
                             ({extremeMode === 'hot' ? selectedForecastDay.max_historical_frequency_percent.toFixed(1) : extremeMode === 'cold' ? selectedForecastDay.min_historical_frequency_percent.toFixed(1) : selectedForecastDay.precipitation_anomaly.toFixed(1)}% extreme probability)
                           </span>
@@ -716,10 +718,18 @@ export default function Home() {
                 <p className="text-gray-700 leading-relaxed">
                   Currently, this weather event occurs approximately{" "}
                   <span className="font-bold text-blue-600">once every {climateData.current_return_period_years.toFixed(0)} years</span> (based on current climatology, not the daily min/max forecast curve).
-                  By mid-century under SSP245 emissions, it's expected to become{" "}
-                  <span className="font-bold text-orange-600">
-                    {(climateData.frequency_increase_percent).toFixed(0)}% more frequent
-                  </span>{" "}
+                  By mid-century under SSP245 emissions,{" "}
+                  {climateData.frequency_increase_percent >= 0 ? (
+                    <>it's expected to become{" "}
+                    <span className="font-bold text-orange-600">
+                      {climateData.frequency_increase_percent.toFixed(0)}% more frequent
+                    </span></>
+                  ) : (
+                    <>its frequency is expected to{" "}
+                    <span className="font-bold text-blue-600">
+                      decrease by {Math.abs(climateData.frequency_increase_percent).toFixed(0)}%
+                    </span></>
+                  )}{" "}
                   — occurring roughly{" "}
                   <span className="font-bold text-red-600">once every {climateData.future_return_period_years.toFixed(0)} years</span>.
                   The selected 5-day curve shows expected average conditions from daily min/max values, with day-specific return period shown above for the selected day.

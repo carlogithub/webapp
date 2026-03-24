@@ -43,6 +43,18 @@ function getHistoricalTemperaturePercentiles(lat: number, lon: number) {
   };
 }
 
+// Exceedance frequency for precipitation: how many times per 100 years
+// does a day with >= precip mm occur? Uses exponential exceedance model.
+// Naturally returns a high frequency for precip=0 (dry days are common)
+// and low frequency for heavy rainfall (rare events).
+function computePrecipExceedanceFrequency(lat: number, lon: number, precip: number): number {
+  const latFactor = Math.abs(lat) / 90;
+  const annualWetDays = Math.max(20, 120 - latFactor * 80); // wet days/year: ~120 tropics, ~40 poles
+  const meanRainOnRainDay = 6 + (1 - latFactor) * 9;       // mm: heavier rain near equator
+  if (precip <= 0) return clamp(annualWetDays, 10, 150);    // frequency of any rain
+  return clamp(annualWetDays * Math.exp(-precip / meanRainOnRainDay), 0.5, 150);
+}
+
 function computeHistoricalFrequency(lat: number, lon: number, tempAnomaly: number) {
   const latFactor = (45 - Math.abs(lat)) / 45; // higher in mid-latitudes
   const lonFactor = 1 - Math.abs(lon) / 180;
@@ -118,17 +130,20 @@ export async function GET(request: NextRequest) {
 
       const minFrequency = computeHistoricalFrequency(latitude, longitude, coldDirectionalAnomaly);
       const maxFrequency = computeHistoricalFrequency(latitude, longitude, hotDirectionalAnomaly);
-      const precipRarity = Math.min(100, Math.max(0, Math.round((dayPrecipAnomaly / 10) * 100) + 20));
+      const wetFrequency = computePrecipExceedanceFrequency(latitude, longitude, precip);
 
       const minReturnPeriod = 100 / minFrequency;
       const maxReturnPeriod = 100 / maxFrequency;
+      const wetReturnPeriod = 100 / wetFrequency;
 
       const recordLengthYears = 40;
       const minBaseRarity = minReturnPeriod > recordLengthYears ? 100 : Math.min(100, Math.round((minReturnPeriod / recordLengthYears) * 100));
       const maxBaseRarity = maxReturnPeriod > recordLengthYears ? 100 : Math.min(100, Math.round((maxReturnPeriod / recordLengthYears) * 100));
+      const wetBaseRarity = wetReturnPeriod > recordLengthYears ? 100 : Math.min(100, Math.round((wetReturnPeriod / recordLengthYears) * 100));
 
       const minRarity = Math.min(100, minBaseRarity + Math.min(15, Math.abs(coldDirectionalAnomaly) * 2));
       const maxRarity = Math.min(100, maxBaseRarity + Math.min(15, hotDirectionalAnomaly * 2));
+      const wetRarity = wetBaseRarity;
 
       return {
         date,
@@ -142,12 +157,14 @@ export async function GET(request: NextRequest) {
         precipitation_anomaly: parseFloat(dayPrecipAnomaly.toFixed(2)),
         min_historical_frequency_percent: parseFloat(minFrequency.toFixed(1)),
         max_historical_frequency_percent: parseFloat(maxFrequency.toFixed(1)),
+        wet_historical_frequency_percent: parseFloat(wetFrequency.toFixed(1)),
         return_period_min_years: parseFloat(minReturnPeriod.toFixed(1)),
         return_period_max_years: parseFloat(maxReturnPeriod.toFixed(1)),
+        return_period_wet_years: parseFloat(wetReturnPeriod.toFixed(1)),
         min_rarity_score: parseFloat(minRarity.toFixed(1)),
         max_rarity_score: parseFloat(maxRarity.toFixed(1)),
-        wet_rarity_score: parseFloat(precipRarity.toFixed(1)),
-        rarity_score: parseFloat(Math.max(minRarity, maxRarity, precipRarity).toFixed(1)),
+        wet_rarity_score: parseFloat(wetRarity.toFixed(1)),
+        rarity_score: parseFloat(Math.max(minRarity, maxRarity, wetRarity).toFixed(1)),
       };
     });
 
